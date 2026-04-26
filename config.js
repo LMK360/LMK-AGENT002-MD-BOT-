@@ -1,11 +1,11 @@
 module.exports = {
     // Session
-    SESSION_ID: process.env.SESSION_ID || 'LMK-MD~DmhBWRYQ#PKwJW79jrs81sM3BGZ5DDd4FrMLCfP9iIiowIa61nx4',
+    SESSION_ID: process.env.SESSION_ID || 'LMK-MD~33w1WDZQ#6di_ssQT2YAhIoZAnRye8rtQXSuos7A4kQefElbjKW4',
     
     // Bot Identity
     BOT_NAME: 'LMK-MD',
     OWNER_NAME: 'LMK-AGENT002',
-    OWNER_NUMBER: '27604707015',
+    OWNER_NUMBER: '27633783183',
     PREFIX: '.',
     
     // Mode - true = public (anyone can use), false = private (owner only)
@@ -18,7 +18,7 @@ module.exports = {
     // Auto features
     AUTO_READ: false,
     AUTO_TYPING: false,
-    AUTO_RECORDING: false,
+    AUTO_RECORDING: true,
     ALWAYS_ONLINE: false,
     
     // Group
