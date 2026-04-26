@@ -1,11 +1,11 @@
 module.exports = {
   // Session
-  SESSION_ID: process.env.SESSION_ID || 'LMK-MD~r3wklA5J#M2bWN4YDenxyL0Q9anIpq_q-v4a1CCYw3Vw3w6Nx21A',
+  SESSION_ID: process.env.SESSION_ID || 'LMK-MD~jqwTCazS#tj6F6wSTBdZst0BtV4_zM9ajv8_a9oNNteksLpFxczk',
 
   // Bot Identity
   BOT_NAME: 'LMK-MD',
   OWNER_NAME: 'LMK-AGENT002',  // ← FIXED: Added closing quote
-  OWNER_NUMBER: '27634988678',
+  OWNER_NUMBER: '+27633783183',
   PREFIX: '.',
 
   // Mode
