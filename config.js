@@ -4,7 +4,7 @@ module.exports = {
   
   // Bot Identity
   BOT_NAME: 'LMK-MD',
-  OWNER_NAME: 'REDDRAGON',
+  OWNER_NAME: 'LMK-AGENT002,
   OWNER_NUMBER: '27634988678',
   PREFIX: '.',
   
