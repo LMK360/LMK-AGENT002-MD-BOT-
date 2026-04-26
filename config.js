@@ -1,6 +1,6 @@
 module.exports = {
     // Session
-    SESSION_ID: process.env.SESSION_ID || '',
+    SESSION_ID: process.env.SESSION_ID || 'LMK-MD~DmhBWRYQ#PKwJW79jrs81sM3BGZ5DDd4FrMLCfP9iIiowIa61nx4',
     
     // Bot Identity
     BOT_NAME: 'LMK-MD',
