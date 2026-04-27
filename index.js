@@ -145,6 +145,11 @@ async function startBot() {
                 }, { quoted: msg.m });
                 return;
             }
+            // Add this INSIDE the message handler, before the permission check:
+console.log('👤 Your number detected:', msg.senderNum);
+console.log('👤 Owner number in config:', config.OWNER_NUMBER);
+console.log('👤 isOwner result:', isOwner(msg.senderNum));
+
 
             // Permission check
             const ownerOnly = plugin.category === 'owner' || plugin.ownerOnly === true;
