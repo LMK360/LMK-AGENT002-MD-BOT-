@@ -90,13 +90,13 @@ async function startBot() {
                 }
             }
         });
-
         // Message handler with FULL DEBUG
         sock.ev.on('messages.upsert', async ({ messages, type }) => {
             console.log('📨 messages.upsert fired! Type:', type, 'Count:', messages.length);
             
-            if (type !== 'notify') {
-                console.log('❌ Not notify type, skipping');
+            // ✅ FIXED: Accept both 'notify' and 'append'
+            if (type !== 'notify' && type !== 'append') {
+                console.log('❌ Not notify/append type, skipping');
                 return;
             }
 
@@ -145,10 +145,43 @@ async function startBot() {
                 }, { quoted: msg.m });
                 return;
             }
-            // Add this INSIDE the message handler, before the permission check:
-console.log('👤 Your number detected:', msg.senderNum);
-console.log('👤 Owner number in config:', config.OWNER_NUMBER);
-console.log('👤 isOwner result:', isOwner(msg.senderNum));
+
+            // ← ADD THESE 3 LINES HERE (before permission check)
+            console.log('👤 Your number detected:', msg.senderNum);
+            console.log('👤 Owner number in config:', config.OWNER_NUMBER);
+            console.log('👤 isOwner result:', isOwner(msg.senderNum));
+
+            // Permission check
+            const ownerOnly = plugin.category === 'owner' || plugin.ownerOnly === true;
+            const isUserOwner = isOwner(msg.senderNum);
+            console.log('🔒 Permission check:', { ownerOnly, isUserOwner, publicMode: config.PUBLIC_MODE });
+
+            if (ownerOnly && !isUserOwner) {
+                await sock.sendMessage(msg.from, {
+                    text: '❌ *Owner only command*'
+                }, { quoted: msg.m });
+                return;
+            }
+
+            if (!config.PUBLIC_MODE && !isUserOwner) {
+                await sock.sendMessage(msg.from, {
+                    text: '🔒 *Bot is in private mode. Only owner can use commands.*'
+                }, { quoted: msg.m });
+                return;
+            }
+
+            // Execute
+            console.log('✅ EXECUTING:', cmd);
+            try {
+                await plugin.execute(sock, msg, args, config);
+                console.log('✅ Command executed successfully');
+            } catch (err) {
+                console.error(`❌ Error in ${cmd}:`, err.message);
+                await sock.sendMessage(msg.from, {
+                    text: `❌ Error: ${err.message}`
+                }, { quoted: msg.m });
+            }
+        });
 
 
             // Permission check
