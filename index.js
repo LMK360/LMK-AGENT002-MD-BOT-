@@ -15,222 +15,247 @@ global.LMK_PLUGINS = new Map();
 const pluginsDir = path.join(__dirname, 'plugins');
 
 async function loadPlugins() {
-await fs.ensureDir(pluginsDir);
-const files = await fs.readdir(pluginsDir);
+  await fs.ensureDir(pluginsDir);
+  const files = await fs.readdir(pluginsDir);
 
-console.log('📁 Plugin files found:', files);
+  console.log('📁 Plugin files found:', files);
 
-global.LMK_PLUGINS.clear();
+  global.LMK_PLUGINS.clear();
 
-for (const file of files.filter(f => f.endsWith('.js'))) {
-console.log('🔌 Loading:', file);
-try {
-const filePath = path.join(pluginsDir, file);
-delete require.cache[require.resolve(filePath)];
-const plugin = require(filePath);
+  for (const file of files.filter(f => f.endsWith('.js'))) {
+    console.log('🔌 Loading:', file);
+    try {
+      const filePath = path.join(pluginsDir, file);
+      delete require.cache[require.resolve(filePath)];
+      const plugin = require(filePath);
 
-console.log('📦 Plugin loaded:', {  
-    command: plugin.command,  
-    category: plugin.category,  
-    hasExecute: typeof plugin.execute === 'function'  
-  });  
+      console.log('📦 Plugin loaded:', {
+        command: plugin.command,
+        category: plugin.category,
+        hasExecute: typeof plugin.execute === 'function'
+      });
 
-  if (plugin.command) {  
-    global.LMK_PLUGINS.set(plugin.command, plugin);  
-    if (plugin.aliases) {  
-      plugin.aliases.forEach(alias => global.LMK_PLUGINS.set(alias, plugin));  
-    }  
-  } else {  
-    console.log('⚠️ No command property in:', file);  
-  }  
-} catch (err) {  
-  console.error(`❌ Failed to load ${file}:`, err.message);  
-  console.error(err.stack);  
-}
+      if (plugin.command) {
+        global.LMK_PLUGINS.set(plugin.command, plugin);
+        if (Array.isArray(plugin.aliases)) {
+          plugin.aliases.forEach(alias => global.LMK_PLUGINS.set(alias, plugin));
+        }
+      } else {
+        console.log('⚠️ No command property in:', file);
+      }
+    } catch (err) {
+      console.error(`❌ Failed to load ${file}:`, err.message);
+      console.error(err.stack);
+    }
+  }
 
-}
-
-const uniquePlugins = new Set([...global.LMK_PLUGINS.values()]);
-console.log(✅ Loaded ${uniquePlugins.size} plugins (${global.LMK_PLUGINS.size} commands + aliases));
-console.log('📚 All commands:', [...global.LMK_PLUGINS.keys()]);
+  const uniquePlugins = new Set([...global.LMK_PLUGINS.values()]);
+  console.log(`✅ Loaded ${uniquePlugins.size} plugins (${global.LMK_PLUGINS.size} commands + aliases)`);
+  console.log('📚 All commands:', [...global.LMK_PLUGINS.keys()]);
 }
 
 // Hot reload function
-global.reloadPlugins = async function() {
-console.log('🔄 Reloading plugins...');
-await loadPlugins();
-return [...global.LMK_PLUGINS.keys()];
+global.reloadPlugins = async function () {
+  console.log('🔄 Reloading plugins...');
+  await loadPlugins();
+  return [...global.LMK_PLUGINS.keys()];
 };
 
 // Start bot
 async function startBot() {
-try {
-if (!config.SESSION_ID) {
-console.log('❌ SESSION_ID not set');
-process.exit(1);
-}
+  try {
+    if (!config.SESSION_ID) {
+      console.log('❌ SESSION_ID not set');
+      process.exit(1);
+    }
 
-await downloadSession(config.SESSION_ID);  
-const sock = await createSocket('./sessions');  
+    await downloadSession(config.SESSION_ID);
+    const sock = await createSocket('./sessions');
 
-sock.ev.on('connection.update', async (update) => {  
-  const { connection, lastDisconnect } = update;  
+    sock.ev.on('connection.update', async (update) => {
+      const { connection, lastDisconnect } = update;
 
-  if (connection === 'open') {  
-    console.log('✅ Bot connected:', sock.user && sock.user.id);  
-    await sock.sendMessage(config.OWNER_NUMBER + '@s.whatsapp.net', {  
-      text: config.ALIVE_MSG  
-    });  
-  }  
+      if (connection === 'open') {
+        console.log('✅ Bot connected:', sock.user && sock.user.id);
 
-  if (connection === 'close') {  
-    const reason = lastDisconnect && lastDisconnect.error && lastDisconnect.error.output && lastDisconnect.error.output.statusCode;  
-    if (reason !== DisconnectReason.loggedOut) {  
-      console.log('🔄 Reconnecting...');  
-      setTimeout(startBot, 5000);  
-    }  
-  }  
-});  
+        const ownerJid = config.OWNER_NUMBER.includes('@')
+          ? config.OWNER_NUMBER
+          : config.OWNER_NUMBER + '@s.whatsapp.net';
 
-// Message handler with FULL DEBUG  
-sock.ev.on('messages.upsert', async ({ messages, type }) => {  
-  console.log('📨 messages.upsert fired! Type:', type, 'Count:', messages.length);  
+        await sock.sendMessage(ownerJid, {
+          text: config.ALIVE_MSG
+        });
+      }
 
-  // ✅ FIXED: Accept both 'notify' and 'append'  
-  if (type !== 'notify' && type !== 'append') {  
-    console.log('❌ Not notify/append type, skipping');  
-    return;  
-  }  
+      if (connection === 'close') {
+        const reason = lastDisconnect?.error?.output?.statusCode;
+        if (reason !== DisconnectReason.loggedOut) {
+          console.log('🔄 Reconnecting...');
+          setTimeout(startBot, 5000);
+        }
+      }
+    });
 
-  const rawMsg = messages[0];  
-  console.log('📄 Raw message keys:', Object.keys(rawMsg));  
-  console.log('🔑 Key:', rawMsg.key);  
-  console.log('💬 Has message?', !!rawMsg.message);  
+    // Message handler
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+      if (!messages?.length) return;
 
-  const msg = parseMessage(rawMsg);  
-  console.log('🔍 Parsed msg:', msg ? {  
-    from: msg.from,  
-    senderNum: msg.senderNum,  
-    text: msg.text.substring(0, 50),  
-    isGroup: msg.isGroup  
-  } : 'NULL');  
+      console.log('📨 messages.upsert fired! Type:', type, 'Count:', messages.length);
 
-  if (!msg) {  
-    console.log('❌ parseMessage returned null');  
-    return;  
-  }  
+      if (type !== 'notify' && type !== 'append') {
+        console.log('❌ Not notify/append type, skipping');
+        return;
+      }
 
-  const prefix = config.PREFIX;  
-  console.log('⚡ Prefix check:', {  
-    prefix: prefix,  
-    textStartsWith: msg.text.startsWith(prefix),  
-    textPreview: msg.text.substring(0, 20)  
-  });  
+      const rawMsg = messages[0];
 
-  if (!msg.text.startsWith(prefix)) {  
-    console.log('❌ Text does not start with prefix');  
-    return;  
-  }  
+      if (!rawMsg) return;
 
-  const args = msg.text.slice(prefix.length).trim().split(/ +/);  
-  const cmd = args.shift().toLowerCase();  
-  console.log('🎯 Command:', cmd);  
+      console.log('📄 Raw message keys:', Object.keys(rawMsg));
+      console.log('🔑 Key:', rawMsg.key);
+      console.log('💬 Has message?', !!rawMsg.message);
 
-  console.log('📚 Available plugins:', [...global.LMK_PLUGINS.keys()]);  
-  const plugin = global.LMK_PLUGINS.get(cmd);  
-  console.log('🔍 Plugin found?', !!plugin);  
+      let msg;
+      try {
+        msg = parseMessage(rawMsg);
+      } catch (e) {
+        console.log('❌ parseMessage crash');
+        return;
+      }
 
-  if (!plugin) {  
-    console.log('❌ Plugin not found for:', cmd);  
-    await sock.sendMessage(msg.from, {  
-      text: `❌ Unknown command: *${cmd}*\\nType *${prefix}menu* for help.`  
-    }, { quoted: msg.m });  
-    return;  
-  }  
+      console.log('🔍 Parsed msg:', msg ? {
+        from: msg.from,
+        senderNum: msg.senderNum,
+        text: msg.text?.substring(0, 50) || '',
+        isGroup: msg.isGroup
+      } : 'NULL');
 
-  // ← ADD THESE 3 LINES HERE (before permission check)  
-  console.log('👤 Your number detected:', msg.senderNum);  
-  console.log('👤 Owner number in config:', config.OWNER_NUMBER);  
-  console.log('👤 isOwner result:', isOwner(msg.senderNum));  
+      if (!msg || !msg.text) {
+        console.log('❌ No valid text message');
+        return;
+      }
 
-  // Permission check  
-  const ownerOnly = plugin.category === 'owner' || plugin.ownerOnly === true;  
-  const isUserOwner = isOwner(msg.senderNum);  
-  console.log('🔒 Permission check:', { ownerOnly, isUserOwner, publicMode: config.PUBLIC_MODE });  
+      const prefix = config.PREFIX;
 
-  if (ownerOnly && !isUserOwner) {  
-    await sock.sendMessage(msg.from, {  
-      text: '❌ *Owner only command*'  
-    }, { quoted: msg.m });  
-    return;  
-  }  
+      console.log('⚡ Prefix check:', {
+        prefix: prefix,
+        textStartsWith: msg.text?.startsWith(prefix),
+        textPreview: msg.text?.substring(0, 20) || ''
+      });
 
-  if (!config.PUBLIC_MODE && !isUserOwner) {  
-    await sock.sendMessage(msg.from, {  
-      text: '🔒 *Bot is in private mode. Only owner can use commands.*'  
-    }, { quoted: msg.m });  
-    return;  
-  }  
+      if (!msg.text.startsWith(prefix)) {
+        console.log('❌ Text does not start with prefix');
+        return;
+      }
 
-  // Execute  
-  console.log('✅ EXECUTING:', cmd);  
-  try {  
-    await plugin.execute(sock, msg, args, config);  
-    console.log('✅ Command executed successfully');  
-  } catch (err) {  
-    console.error(`❌ Error in ${cmd}:`, err.message);  
-    await sock.sendMessage(msg.from, {  
-      text: `❌ Error: ${err.message}`  
-    }, { quoted: msg.m });  
-  }  
-});  
+      const body = msg.text.slice(prefix.length).trim();
+      if (!body) return;
 
-// Group events  
-sock.ev.on('group-participants.update', async (update) => {  
-  const { id, participants, action } = update;  
+      const args = body.split(/ +/);
+      const cmd = args.shift().toLowerCase();
 
-  if (action === 'add' && config.WELCOME_MSG) {  
-    for (const user of participants) {  
-      const text = config.WELCOME_MSG.replace('@user', '@' + user.split('@')[0]);  
-      await sock.sendMessage(id, { text, mentions: [user] });  
-    }  
-  }  
+      console.log('🎯 Command:', cmd);
 
-  if (action === 'remove' && config.GOODBYE_MSG) {  
-    for (const user of participants) {  
-      const text = config.GOODBYE_MSG.replace('@user', '@' + user.split('@')[0]);  
-      await sock.sendMessage(id, { text, mentions: [user] });  
-    }  
-  }  
-});
+      console.log('📚 Available plugins:', [...global.LMK_PLUGINS.keys()]);
+      const plugin = global.LMK_PLUGINS.get(cmd);
 
-} catch (err) {
-console.error('❌ Bot error:', err.message);
-setTimeout(startBot, 10000);
-}
+      console.log('🔍 Plugin found?', !!plugin);
+
+      if (!plugin) {
+        console.log('❌ Plugin not found for:', cmd);
+        await sock.sendMessage(msg.from, {
+          text: `❌ Unknown command: *${cmd}*\nType *${prefix}menu* for help.`
+        }, { quoted: msg.m });
+        return;
+      }
+
+      if (typeof plugin.execute !== 'function') {
+        console.log('❌ Invalid plugin (no execute):', cmd);
+        return;
+      }
+
+      console.log('👤 Your number detected:', msg.senderNum);
+      console.log('👤 Owner number in config:', config.OWNER_NUMBER);
+      console.log('👤 isOwner result:', isOwner(msg.senderNum));
+
+      const ownerOnly = plugin.category === 'owner' || plugin.ownerOnly === true;
+      const isUserOwner = isOwner(msg.senderNum);
+
+      console.log('🔒 Permission check:', { ownerOnly, isUserOwner, publicMode: config.PUBLIC_MODE });
+
+      if (ownerOnly && !isUserOwner) {
+        await sock.sendMessage(msg.from, {
+          text: '❌ *Owner only command*'
+        }, { quoted: msg.m });
+        return;
+      }
+
+      if (!config.PUBLIC_MODE && !isUserOwner) {
+        await sock.sendMessage(msg.from, {
+          text: '🔒 *Bot is in private mode. Only owner can use commands.*'
+        }, { quoted: msg.m });
+        return;
+      }
+
+      console.log('✅ EXECUTING:', cmd);
+
+      try {
+        await plugin.execute(sock, msg, args, config);
+        console.log('✅ Command executed successfully');
+      } catch (err) {
+        console.error(`❌ Error in ${cmd}:`, err.message);
+        await sock.sendMessage(msg.from, {
+          text: `❌ Error: ${err.message}`
+        }, { quoted: msg.m });
+      }
+    });
+
+    // Group events
+    sock.ev.on('group-participants.update', async (update) => {
+      const { id, participants, action } = update;
+
+      if (action === 'add' && config.WELCOME_MSG) {
+        for (const user of participants) {
+          const text = config.WELCOME_MSG.replace('@user', '@' + user.split('@')[0]);
+          await sock.sendMessage(id, { text, mentions: [user] });
+        }
+      }
+
+      if (action === 'remove' && config.GOODBYE_MSG) {
+        for (const user of participants) {
+          const text = config.GOODBYE_MSG.replace('@user', '@' + user.split('@')[0]);
+          await sock.sendMessage(id, { text, mentions: [user] });
+        }
+      }
+    });
+
+  } catch (err) {
+    console.error('❌ Bot error:', err.message);
+    setTimeout(startBot, 10000);
+  }
 }
 
 // Express server
 app.get('/', (req, res) => {
-res.json({
-status: 'online',
-bot: config.BOT_NAME,
-owner: config.OWNER_NAME,
-mode: config.PUBLIC_MODE ? 'public' : 'private',
-plugins: global.LMK_PLUGINS ? [...new Set([...global.LMK_PLUGINS.values()])].length : 0,
-time: new Date().toISOString()
-});
+  res.json({
+    status: 'online',
+    bot: config.BOT_NAME,
+    owner: config.OWNER_NAME,
+    mode: config.PUBLIC_MODE ? 'public' : 'private',
+    plugins: global.LMK_PLUGINS ? [...new Set([...global.LMK_PLUGINS.values()])].length : 0,
+    time: new Date().toISOString()
+  });
 });
 
 app.get('/health', (req, res) => {
-res.json({ status: 'alive' });
+  res.json({ status: 'alive' });
 });
 
 // Start everything
 (async () => {
-await loadPlugins();
-app.listen(PORT, () => {
-console.log(🌐 Server on port ${PORT});
-});
-startBot();
+  await loadPlugins();
+  app.listen(PORT, () => {
+    console.log(`🌐 Server on port ${PORT}`);
+  });
+  startBot();
 })();
