@@ -1,11 +1,11 @@
 module.exports = {
     // Session
-    SESSION_ID: process.env.SESSION_ID || 'LMK-MD~ii5jWYSA#YTSOTN9IsmG3HMjiLDl8WOGaoZiF9QNnM-YvIgtpGwg',
+    SESSION_ID: process.env.SESSION_ID || 'LMK-MD~frBDGDBI#dCCb-fAu6d3qScPuhaooZ8_CgMyiX1TflESHcHhG8N8',
     
     // Bot Identity
     BOT_NAME: 'LMK-MD',
     OWNER_NAME: 'LMK-AGENT002',
-    OWNER_NUMBER: '27604707015',
+    OWNER_NUMBER: '27633783183',
     PREFIX: '.',
     
     // Mode - true = public (anyone can use), false = private (owner only)
