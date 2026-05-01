@@ -102,37 +102,55 @@ async function startBot() {
 
       console.log('📨 messages.upsert fired! Type:', type, 'Count:', messages.length);
 
+      // ✅ FIX: allow both 'notify' (others' messages) and 'append' (your own messages)
       if (type !== 'notify' && type !== 'append') {
         console.log('❌ Not notify/append type, skipping');
         return;
       }
 
       const rawMsg = messages[0];
-
       if (!rawMsg) return;
 
-      console.log('📄 Raw message keys:', Object.keys(rawMsg));
+      // ✅ FIX: Skip messages with no content (status updates, receipts, etc.)
+      if (!rawMsg.message) {
+        console.log('❌ No message content, skipping');
+        return;
+      }
+
+      // ✅ FIX: Skip protocol/ephemeral messages that aren't real chat messages
+      const msgKeys = Object.keys(rawMsg.message);
+      const ignoredTypes = ['protocolMessage', 'senderKeyDistributionMessage', 'reactionMessage'];
+      if (msgKeys.some(k => ignoredTypes.includes(k))) {
+        console.log('❌ Protocol/reaction message, skipping');
+        return;
+      }
+
+      console.log('📄 Raw message keys:', msgKeys);
       console.log('🔑 Key:', rawMsg.key);
-      console.log('💬 Has message?', !!rawMsg.message);
+      console.log('💬 fromMe?', rawMsg.key.fromMe);
 
       let msg;
       try {
         msg = parseMessage(rawMsg);
       } catch (e) {
-        console.log('❌ parseMessage crash');
+        console.log('❌ parseMessage crash:', e.message);
         return;
       }
-
-      console.log('🔍 Parsed msg:', msg ? {
-        from: msg.from,
-        senderNum: msg.senderNum,
-        text: msg.text?.substring(0, 50) || '',
-        isGroup: msg.isGroup
-      } : 'NULL');
 
       if (!msg || !msg.text) {
         console.log('❌ No valid text message');
         return;
+      }
+
+      // ✅ FIX: Resolve OWNER_SELF — if this is a fromMe message,
+      // the sender IS the owner. Use sock.user.id to get the real number.
+      let resolvedSenderNum = msg.senderNum;
+      if (msg.senderNum === 'OWNER_SELF') {
+        // sock.user.id looks like "27633783183:27@s.whatsapp.net"
+        // Extract just the number before the colon
+        const botId = sock.user?.id || '';
+        resolvedSenderNum = botId.split(':')[0].split('@')[0];
+        console.log('👤 fromMe message — resolved sender as:', resolvedSenderNum);
       }
 
       const prefix = config.PREFIX;
@@ -155,10 +173,9 @@ async function startBot() {
       const cmd = args.shift().toLowerCase();
 
       console.log('🎯 Command:', cmd);
-
       console.log('📚 Available plugins:', [...global.LMK_PLUGINS.keys()]);
-      const plugin = global.LMK_PLUGINS.get(cmd);
 
+      const plugin = global.LMK_PLUGINS.get(cmd);
       console.log('🔍 Plugin found?', !!plugin);
 
       if (!plugin) {
@@ -174,12 +191,12 @@ async function startBot() {
         return;
       }
 
-      console.log('👤 Your number detected:', msg.senderNum);
+      console.log('👤 Resolved sender number:', resolvedSenderNum);
       console.log('👤 Owner number in config:', config.OWNER_NUMBER);
-      console.log('👤 isOwner result:', isOwner(msg.senderNum));
+      console.log('👤 isOwner result:', isOwner(resolvedSenderNum));
 
       const ownerOnly = plugin.category === 'owner' || plugin.ownerOnly === true;
-      const isUserOwner = isOwner(msg.senderNum);
+      const isUserOwner = isOwner(resolvedSenderNum);
 
       console.log('🔒 Permission check:', { ownerOnly, isUserOwner, publicMode: config.PUBLIC_MODE });
 
@@ -196,6 +213,9 @@ async function startBot() {
         }, { quoted: msg.m });
         return;
       }
+
+      // ✅ Pass resolved sender number into msg so plugins also get it right
+      msg.senderNum = resolvedSenderNum;
 
       console.log('✅ EXECUTING:', cmd);
 
